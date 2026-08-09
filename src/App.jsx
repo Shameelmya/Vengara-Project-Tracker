@@ -432,13 +432,21 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
   );
 }
 
-function LoginScreen({ onLogin, staffUsers, authError }) {
+function LoginScreen({ onLogin, staffUsers, authError, allUpdates }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const adminUser = { username: 'PK Navas MLA', role: 'admin', id: 'admin', password: 'Navas@2026' };
   const allUsers = [adminUser, ...staffUsers];
+
+  const lastSeen = parseInt(localStorage.getItem('admin_last_seen_notifications') || '0', 10);
+  const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
+  
+  const newUpdatesCount = allUpdates.filter(u => {
+    const time = new Date(u.createdAt).getTime();
+    return time > lastSeen && time > twoDaysAgo;
+  }).length;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -505,6 +513,11 @@ function LoginScreen({ onLogin, staffUsers, authError }) {
                   </div>
                   <span className={`font-semibold text-sm text-center ${isAdmin ? 'text-white' : 'text-slate-700'}`}>{u.username}</span>
                   {isAdmin && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full mt-[-6px]">Admin</span>}
+                  {isAdmin && newUpdatesCount > 0 && !selectedUser && (
+                    <span className="absolute top-[-8px] right-[-8px] bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-pulse">
+                      {newUpdatesCount > 99 ? '99+' : newUpdatesCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -546,6 +559,7 @@ export default function App() {
   // Data State
   const [allProjects, setAllProjects] = useState([]); 
   const [localUpdates, setLocalUpdates] = useState([]); 
+  const [allUpdates, setAllUpdates] = useState([]);
   const [customMainFolders, setCustomMainFolders] = useState([]);
   const [customCategories, setCustomCategories] = useState([]);
   const [staffUsers, setStaffUsers] = useState([]);
@@ -555,7 +569,10 @@ export default function App() {
   const [isAddingMainFolderModalOpen, setIsAddingMainFolderModalOpen] = useState(false);
   const [isAddingCategoryModalOpen, setIsAddingCategoryModalOpen] = useState(false);
   const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [newNameInput, setNewNameInput] = useState('');
+  
+  const [expandedProjectId, setExpandedProjectId] = useState(null);
   
   const [actionMenu, setActionMenu] = useState(null); 
   const [promptDialog, setPromptDialog] = useState(null);
@@ -697,7 +714,13 @@ export default function App() {
       setStaffUsers(data);
     });
 
-    return () => { unsubMain(); unsubCat(); unsubProj(); unsubStaff(); };
+    const updatesRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates');
+    const unsubUpdates = onSnapshot(updatesRef, (snap) => {
+      const data = []; snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      setAllUpdates(data);
+    });
+
+    return () => { unsubMain(); unsubCat(); unsubProj(); unsubStaff(); unsubUpdates(); };
   }, [user, authError]);
 
   // Merge Default & Custom Data
@@ -740,7 +763,7 @@ export default function App() {
   });
 
   if (!loggedInUser) {
-    return <LoginScreen onLogin={setLoggedInUser} staffUsers={staffUsers} authError={authError} />;
+    return <LoginScreen onLogin={setLoggedInUser} staffUsers={staffUsers} authError={authError} allUpdates={allUpdates} />;
   }
 
   // Filter SubFolders based on active Main Folder
@@ -833,19 +856,19 @@ export default function App() {
     });
   };
 
-  const handleSaveWuDay = async (folder, dayValue) => {
+  const handleSaveWuDay = async (folder, dayValues) => {
     const isMain = INITIAL_MAIN_FOLDERS.some(m => m.id === folder.id) || customMainFolders.some(m => m.id === folder.id);
     const collectionName = isMain ? 'main_folders' : 'categories';
     const setter = isMain ? setCustomMainFolders : setCustomCategories;
     
     setter(prev => {
       const idx = prev.findIndex(c => c.id === folder.id);
-      if(idx >= 0) { const arr = [...prev]; arr[idx] = { ...arr[idx], wuDay: dayValue }; return arr; }
-      return [...prev, { ...folder, wuDay: dayValue }];
+      if(idx >= 0) { const arr = [...prev]; arr[idx] = { ...arr[idx], wuDay: dayValues }; return arr; }
+      return [...prev, { ...folder, wuDay: dayValues }];
     });
 
     if (user && !authError) {
-      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { wuDay: dayValue }, { merge: true }); } catch (err) { console.error(err); }
+      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { wuDay: dayValues }, { merge: true }); } catch (err) { console.error(err); }
     }
   };
 
@@ -973,6 +996,22 @@ export default function App() {
             <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
               Connected to Cloud DB
             </span>
+            {(!loggedInUser || loggedInUser.role === 'admin') && (
+              <button 
+                onClick={() => {
+                  localStorage.setItem('admin_last_seen_notifications', Date.now().toString());
+                  setIsNotificationsModalOpen(true);
+                }} 
+                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative" title="Notifications"
+              >
+                <div className="relative">
+                  <span className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center">🔔</span>
+                  {allUpdates.filter(u => new Date(u.createdAt).getTime() > parseInt(localStorage.getItem('admin_last_seen_notifications') || '0', 10) && new Date(u.createdAt).getTime() > Date.now() - 48 * 60 * 60 * 1000).length > 0 && (
+                    <span className="absolute top-[-2px] right-[-2px] bg-red-500 w-2.5 h-2.5 rounded-full animate-pulse border border-white"></span>
+                  )}
+                </div>
+              </button>
+            )}
             {(!loggedInUser || loggedInUser.role === 'admin') && (
               <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative" title="Settings">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1142,6 +1181,61 @@ export default function App() {
           displayMainFolders={displayMainFolders}
         />
       )}
+      {/* Notifications Modal */}
+      {isNotificationsModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setIsNotificationsModalOpen(false)}>
+          <div className="bg-white max-w-2xl w-full max-h-[85vh] rounded-2xl flex flex-col shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+              <h2 className="text-xl font-bold flex items-center gap-2">🔔 Recent Updates (Last 2 Days)</h2>
+              <button onClick={() => setIsNotificationsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              {(() => {
+                const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
+                const recentUpdates = allUpdates
+                  .filter(u => new Date(u.createdAt).getTime() > twoDaysAgo)
+                  .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                
+                if (recentUpdates.length === 0) {
+                  return <p className="text-slate-500 text-center py-8">No updates in the last 48 hours.</p>;
+                }
+
+                return recentUpdates.map(u => {
+                  const proj = allProjects.find(p => p.id === u.projectId);
+                  return (
+                    <div 
+                      key={u.id} 
+                      onClick={() => {
+                        if (proj && proj.localBodyIds && proj.localBodyIds.length > 0) {
+                          const subFolder = allSubFolders.find(sf => sf.id === proj.localBodyIds[0]);
+                          if (subFolder) {
+                            const mainFolder = displayMainFolders.find(mf => mf.id === subFolder.mainFolderId);
+                            if (mainFolder) {
+                              setActiveMainFolder(mainFolder);
+                              setActiveSubFolder(subFolder);
+                              setExpandedProjectId(proj.id);
+                              setIsNotificationsModalOpen(false);
+                            }
+                          }
+                        }
+                      }}
+                      className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors cursor-pointer"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-bold text-sm text-indigo-700">{proj ? proj.name : 'Unknown Project'}</h4>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border">
+                          {new Date(u.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-700 line-clamp-2">{u.text}</p>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project Modal (When Sub-folder is opened) */}
       {activeSubFolder && (
@@ -1151,12 +1245,22 @@ export default function App() {
           allSubFolders={allSubFolders}
           onClose={() => setActiveSubFolder(null)}
           projects={allProjects.filter(p => p.localBodyIds && p.localBodyIds.includes(activeSubFolder.id))}
-          onAddProject={(name) => handleAddProject([activeSubFolder.id], name)}
+          allUpdates={allUpdates}
+          localUpdates={localUpdates}
+          setLocalUpdates={setLocalUpdates}
+          setAllProjects={setAllProjects}
+          onAddProject={(name) => {
+            const newProject = { 
+              id: Date.now().toString(), name, 
+              localBodyIds: [activeSubFolder.id], isFinished: false, createdAt: new Date().toISOString() 
+            };
+            setAllProjects(prev => [...prev, newProject]);
+            if (user && !authError) { try { setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', newProject.id), newProject); } catch (e){} }
+          }}
           user={user} authError={authError} db={db}
-          localUpdates={localUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
-          setActionMenu={setActionMenu} setConfirmDialog={setTypeToDeleteDialog} setPromptDialog={setPromptDialog}
-          setLinkProjectData={setLinkProjectData}
-          onUpdateFolderContacts={handleUpdateFolderContacts}
+          setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData} onUpdateFolderContacts={handleUpdateFolderContacts}
+          expandedProjectId={expandedProjectId}
+          setExpandedProjectId={setExpandedProjectId}
         />
       )}
     </div>
@@ -1320,13 +1424,11 @@ function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
 }
 
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts, loggedInUser }) {
+function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, allUpdates, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts, loggedInUser, expandedProjectId, setExpandedProjectId }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [allUpdates, setAllUpdates] = useState([]);
-  const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [selectedPdfProjectIds, setSelectedPdfProjectIds] = useState([]);
 
@@ -1349,17 +1451,6 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
-
-  useEffect(() => {
-    if (!user || authError) { setAllUpdates(localUpdates); return; }
-    setIsLoadingUpdates(true);
-    const updatesRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates');
-    const unsubscribe = onSnapshot(updatesRef, (snapshot) => {
-      const data = []; snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-      setAllUpdates(data); setIsLoadingUpdates(false);
-    }, (e) => { console.error(e); setIsLoadingUpdates(false); });
-    return () => unsubscribe();
-  }, [user, authError, localUpdates]);
 
   const handleCreateProject = (e) => {
     e.preventDefault(); if (!newProjectName.trim()) return;
@@ -1434,7 +1525,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     
     const opt = {
       margin:       [0.5, 0.5, 0.5, 0.5],
-      filename:     `${body.name.replace(/\\s+/g, '_')}_Report.pdf`,
+      filename:     `${body.name.replace(/\s+/g, '_')}_Report.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -1513,9 +1604,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                     key={project.id} project={project} theme={body.theme} index={activeProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
-                    isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
-                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
-                    setLinkProjectData={setLinkProjectData}
+                    isLoadingUpdates={false} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
+                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData}
+                    expandedProjectId={expandedProjectId} setExpandedProjectId={setExpandedProjectId}
                   />
                 ))}
                 
@@ -1535,9 +1626,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                     key={project.id} project={project} theme={body.theme} index={finishedProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
-                    isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
-                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
-                    setLinkProjectData={setLinkProjectData}
+                    isLoadingUpdates={false} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
+                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData}
+                    expandedProjectId={expandedProjectId} setExpandedProjectId={setExpandedProjectId}
                   />
                 ))}
               </>
@@ -1590,13 +1681,21 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, loggedInUser }) {
+function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, loggedInUser, expandedProjectId, setExpandedProjectId }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [attachments, setAttachments] = useState([]);
-  const [expandedImage, setExpandedImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  
+  useEffect(() => {
+    if (expandedProjectId === project.id) {
+      setIsOpen(true);
+      setExpandedProjectId(null);
+    }
+  }, [expandedProjectId, project.id, setExpandedProjectId]);
+
+  const [expandedImage, setExpandedImage] = useState(null);
   
   const [editingUpdateId, setEditingUpdateId] = useState(null);
   const [editUpdateText, setEditUpdateText] = useState('');
@@ -1623,7 +1722,9 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
   const currentDay = new Date().getDay();
   const folderHasTodayWuDay = project.localBodyIds && project.localBodyIds.some(fid => {
     const folder = allSubFolders?.find(sf => sf.id === fid);
-    return folder && folder.wuDay === currentDay;
+    if (!folder || !folder.wuDay) return false;
+    const days = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
+    return days.includes(currentDay);
   });
   const needsWeeklyUpdate = !project.isFinished && folderHasTodayWuDay && !isSameWeek(project.lastWeeklyUpdate);
 
@@ -1933,14 +2034,20 @@ function WuDayModal({ folder, onClose, onSave }) {
     { value: 3, label: 'Wednesday' },
     { value: 4, label: 'Thursday' },
     { value: 5, label: 'Friday' },
-    { value: 6, label: 'Saturday' },
-    { value: null, label: 'No Day' }
+    { value: 6, label: 'Saturday' }
   ];
-  const [selectedDay, setSelectedDay] = useState(folder.wuDay ?? null);
+  const initialDays = Array.isArray(folder.wuDay) ? folder.wuDay : (typeof folder.wuDay === 'number' ? [folder.wuDay] : []);
+  const [selectedDays, setSelectedDays] = useState(initialDays);
+
+  const toggleDay = (dayValue) => {
+    setSelectedDays(prev => 
+      prev.includes(dayValue) ? prev.filter(d => d !== dayValue) : [...prev, dayValue]
+    );
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
-    onSave(folder, selectedDay);
+    onSave(folder, selectedDays);
     onClose();
   };
 
@@ -1948,17 +2055,20 @@ function WuDayModal({ folder, onClose, onSave }) {
     <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
-        <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-600"/> Weekly Update Day</h3>
-        <p className="text-xs text-slate-500 mb-4">Select the day when projects in <strong>{folder.name}</strong> require an update.</p>
+        <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-600"/> Weekly Update Days</h3>
+        <p className="text-xs text-slate-500 mb-4">Select the days when projects in <strong>{folder.name}</strong> require an update.</p>
         
         <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto mb-4 space-y-2">
-            {days.map(day => (
-              <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedDay === day.value ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
-                <input type="radio" name="wuday" value={day.value} checked={selectedDay === day.value} onChange={() => setSelectedDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500" />
-                <span className="text-sm font-semibold text-slate-700">{day.label}</span>
-              </label>
-            ))}
+            {days.map(day => {
+              const isSelected = selectedDays.includes(day.value);
+              return (
+                <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
+                  <input type="checkbox" value={day.value} checked={isSelected} onChange={() => toggleDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                  <span className="text-sm font-semibold text-slate-700">{day.label}</span>
+                </label>
+              );
+            })}
           </div>
           <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors shadow-sm shrink-0">
             Save
