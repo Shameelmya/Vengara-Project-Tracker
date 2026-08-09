@@ -1258,7 +1258,7 @@ export default function App() {
             if (user && !authError) { try { setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', newProject.id), newProject); } catch (e){} }
           }}
           user={user} authError={authError} db={db}
-          setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData} onUpdateFolderContacts={handleUpdateFolderContacts}
+          setActionMenu={setActionMenu} setConfirmDialog={setTypeToDeleteDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData} onUpdateFolderContacts={handleUpdateFolderContacts}
           expandedProjectId={expandedProjectId}
           setExpandedProjectId={setExpandedProjectId}
         />
