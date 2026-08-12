@@ -584,7 +584,7 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   const [linkProjectData, setLinkProjectData] = useState(null);
-  const [wuDayFolder, setWuDayFolder] = useState(null);
+  const [wuDayItem, setWuDayItem] = useState(null);
 
   const handleExportJSON = async () => {
     try {
@@ -856,19 +856,37 @@ export default function App() {
     });
   };
 
-  const handleSaveWuDay = async (folder, dayValues) => {
-    const isMain = INITIAL_MAIN_FOLDERS.some(m => m.id === folder.id) || customMainFolders.some(m => m.id === folder.id);
+  const handleSaveWuDay = async (item, dayValues) => {
+    // If it's a project (has localBodyIds)
+    if (item.localBodyIds) {
+      setAllProjects(prev => prev.map(p => p.id === item.id ? { ...p, wuDay: dayValues } : p));
+      if (user && !authError) {
+        try { 
+          if (dayValues === undefined) {
+             // To remove the field, we can use deleteField() from firestore if imported, but it's simpler to set it to null and let the frontend treat null/undefined the same, or just save null.
+             // Actually, saving null or undefined might not clear it perfectly without deleteField, but let's save null to indicate "inherit".
+             await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', item.id), { wuDay: null }, { merge: true });
+          } else {
+             await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', item.id), { wuDay: dayValues }, { merge: true });
+          }
+        } catch (err) { console.error(err); }
+      }
+      return;
+    }
+
+    // Otherwise it's a folder
+    const isMain = INITIAL_MAIN_FOLDERS.some(m => m.id === item.id) || customMainFolders.some(m => m.id === item.id);
     const collectionName = isMain ? 'main_folders' : 'categories';
     const setter = isMain ? setCustomMainFolders : setCustomCategories;
     
     setter(prev => {
-      const idx = prev.findIndex(c => c.id === folder.id);
+      const idx = prev.findIndex(c => c.id === item.id);
       if(idx >= 0) { const arr = [...prev]; arr[idx] = { ...arr[idx], wuDay: dayValues }; return arr; }
-      return [...prev, { ...folder, wuDay: dayValues }];
+      return [...prev, { ...item, wuDay: dayValues }];
     });
 
     if (user && !authError) {
-      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { wuDay: dayValues }, { merge: true }); } catch (err) { console.error(err); }
+      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, item.id), { wuDay: dayValues }, { merge: true }); } catch (err) { console.error(err); }
     }
   };
 
@@ -921,7 +939,7 @@ export default function App() {
           if (loggedInUser && loggedInUser.role !== 'admin') return;
           const options = [
             { label: "Rename", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRename(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) },
-            { label: "Weekly Update Day", icon: <Calendar className="w-4 h-4"/>, onClick: () => setWuDayFolder(item) },
+            { label: "Weekly Update Day", icon: <Calendar className="w-4 h-4"/>, onClick: () => setWuDayItem(item) },
             { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDelete(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) }
           ];
           if (!isMainFolder) {
@@ -1082,8 +1100,8 @@ export default function App() {
         />
       )}
       
-      {wuDayFolder && (
-        <WuDayModal folder={wuDayFolder} onClose={() => setWuDayFolder(null)} onSave={handleSaveWuDay} />
+      {wuDayItem && (
+        <WuDayModal item={wuDayItem} onClose={() => setWuDayItem(null)} onSave={handleSaveWuDay} />
       )}
       
       {linkProjectData && (
@@ -1261,6 +1279,7 @@ export default function App() {
           setActionMenu={setActionMenu} setConfirmDialog={setTypeToDeleteDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData} onUpdateFolderContacts={handleUpdateFolderContacts}
           expandedProjectId={expandedProjectId}
           setExpandedProjectId={setExpandedProjectId}
+          setWuDayItem={setWuDayItem}
         />
       )}
     </div>
@@ -1424,7 +1443,7 @@ function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
 }
 
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, allUpdates, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts, loggedInUser, expandedProjectId, setExpandedProjectId }) {
+function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, allUpdates, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts, loggedInUser, expandedProjectId, setExpandedProjectId, setWuDayItem }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -1607,6 +1626,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                     isLoadingUpdates={false} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
                     setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData}
                     expandedProjectId={expandedProjectId} setExpandedProjectId={setExpandedProjectId}
+                    setWuDayItem={setWuDayItem}
                   />
                 ))}
                 
@@ -1629,6 +1649,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                     isLoadingUpdates={false} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
                     setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog} setLinkProjectData={setLinkProjectData}
                     expandedProjectId={expandedProjectId} setExpandedProjectId={setExpandedProjectId}
+                    setWuDayItem={setWuDayItem}
                   />
                 ))}
               </>
@@ -1681,7 +1702,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, loggedInUser, expandedProjectId, setExpandedProjectId }) {
+function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, loggedInUser, expandedProjectId, setExpandedProjectId, setWuDayItem }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -1720,12 +1741,22 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
   };
 
   const currentDay = new Date().getDay();
-  const folderHasTodayWuDay = project.localBodyIds && project.localBodyIds.some(fid => {
-    const folder = allSubFolders?.find(sf => sf.id === fid);
-    if (!folder || !folder.wuDay) return false;
-    const days = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
-    return days.includes(currentDay);
-  });
+  let folderHasTodayWuDay = false;
+  
+  if (project.wuDay !== undefined && project.wuDay !== null) {
+    // Project has a custom override
+    const days = Array.isArray(project.wuDay) ? project.wuDay : [project.wuDay];
+    folderHasTodayWuDay = days.includes(currentDay);
+  } else {
+    // Inherit from folder
+    folderHasTodayWuDay = project.localBodyIds && project.localBodyIds.some(fid => {
+      const folder = allSubFolders?.find(sf => sf.id === fid);
+      if (!folder || folder.wuDay === undefined || folder.wuDay === null) return false;
+      const days = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
+      return days.includes(currentDay);
+    });
+  }
+  
   const needsWeeklyUpdate = !project.isFinished && folderHasTodayWuDay && !isSameWeek(project.lastWeeklyUpdate);
 
   const themeStyles = THEME_MAP[theme] || THEME_MAP.indigo;
@@ -1835,6 +1866,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
         if (user && !authError) { try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { isFinished: newStatus }); } catch (e){} }
       }},
       { label: "Make a Copy (Link)", icon: <Copy className="w-4 h-4"/>, onClick: () => setLinkProjectData(project) },
+      { label: "Weekly Update Days", icon: <Calendar className="w-4 h-4"/>, onClick: () => setWuDayItem(project) },
       { label: "Edit Name", icon: <Edit3 className="w-4 h-4"/>, onClick: () => setPromptDialog({ title: "Edit Project Name", defaultValue: project.name, onConfirm: async (n) => {
         setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: n } : p));
         if (user && !authError) { try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { name: n }); } catch (e){} }
@@ -2026,7 +2058,9 @@ function LinkProjectModal({ project, onClose, onSave, mainFolders, allSubFolders
 }
 
 // --- WU DAY MODAL ---
-function WuDayModal({ folder, onClose, onSave }) {
+function WuDayModal({ item, onClose, onSave }) {
+  const isProject = !!item.localBodyIds;
+  
   const days = [
     { value: 0, label: 'Sunday' },
     { value: 1, label: 'Monday' },
@@ -2036,8 +2070,12 @@ function WuDayModal({ folder, onClose, onSave }) {
     { value: 5, label: 'Friday' },
     { value: 6, label: 'Saturday' }
   ];
-  const initialDays = Array.isArray(folder.wuDay) ? folder.wuDay : (typeof folder.wuDay === 'number' ? [folder.wuDay] : []);
+  
+  // If wuDay is null/undefined, it means no custom override for projects, or no days for folders.
+  const initialDays = Array.isArray(item.wuDay) ? item.wuDay : (typeof item.wuDay === 'number' ? [item.wuDay] : []);
   const [selectedDays, setSelectedDays] = useState(initialDays);
+  
+  const isInheriting = isProject && (item.wuDay === undefined || item.wuDay === null);
 
   const toggleDay = (dayValue) => {
     setSelectedDays(prev => 
@@ -2047,7 +2085,12 @@ function WuDayModal({ folder, onClose, onSave }) {
 
   const handleSave = (e) => {
     e.preventDefault();
-    onSave(folder, selectedDays);
+    onSave(item, selectedDays);
+    onClose();
+  };
+  
+  const handleInherit = () => {
+    onSave(item, null); // passing null will remove the override
     onClose();
   };
 
@@ -2056,23 +2099,42 @@ function WuDayModal({ folder, onClose, onSave }) {
       <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
         <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-600"/> Weekly Update Days</h3>
-        <p className="text-xs text-slate-500 mb-4">Select the days when projects in <strong>{folder.name}</strong> require an update.</p>
+        <p className="text-xs text-slate-500 mb-4">
+          {isProject 
+            ? `Select custom update days for project "${item.name}".` 
+            : `Select the days when projects in "${item.name}" require an update.`}
+        </p>
+        
+        {isProject && isInheriting && (
+          <div className="mb-4 bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-sm flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+            <span>Currently <strong>inheriting</strong> update days from its parent folder. Selecting days below will create a custom override.</span>
+          </div>
+        )}
         
         <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto mb-4 space-y-2">
             {days.map(day => {
               const isSelected = selectedDays.includes(day.value);
               return (
-                <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
-                  <input type="checkbox" value={day.value} checked={isSelected} onChange={() => toggleDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected && !isInheriting ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
+                  <input type="checkbox" value={day.value} checked={isSelected && !isInheriting} onChange={() => toggleDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
                   <span className="text-sm font-semibold text-slate-700">{day.label}</span>
                 </label>
               );
             })}
           </div>
-          <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors shadow-sm shrink-0">
-            Save
-          </button>
+          
+          <div className="flex flex-col gap-2 shrink-0">
+            <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors shadow-sm">
+              {isProject ? 'Save Custom Days' : 'Save'}
+            </button>
+            {isProject && !isInheriting && (
+              <button type="button" onClick={handleInherit} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-colors shadow-sm">
+                Remove Custom Override (Inherit)
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>
