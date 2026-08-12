@@ -2117,8 +2117,8 @@ function WuDayModal({ item, onClose, onSave }) {
             {days.map(day => {
               const isSelected = selectedDays.includes(day.value);
               return (
-                <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected && !isInheriting ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
-                  <input type="checkbox" value={day.value} checked={isSelected && !isInheriting} onChange={() => toggleDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
+                  <input type="checkbox" value={day.value} checked={isSelected} onChange={() => toggleDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
                   <span className="text-sm font-semibold text-slate-700">{day.label}</span>
                 </label>
               );
