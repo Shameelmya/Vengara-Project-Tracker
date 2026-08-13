@@ -1740,24 +1740,84 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
     return d >= startOfWeek && d <= endOfWeek;
   };
 
+  // Get effective WU days for this project (from project override or folder)
+  const getProjectWuDays = () => {
+    if (project.wuDay !== undefined && project.wuDay !== null) {
+      return Array.isArray(project.wuDay) ? project.wuDay : [project.wuDay];
+    }
+    let days = [];
+    if (project.localBodyIds) {
+      project.localBodyIds.forEach(fid => {
+        const folder = allSubFolders?.find(sf => sf.id === fid);
+        if (folder && folder.wuDay !== undefined && folder.wuDay !== null) {
+          const folderDays = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
+          days = [...days, ...folderDays];
+        }
+      });
+    }
+    return [...new Set(days)];
+  };
+
+  const wuDays = getProjectWuDays();
   const currentDay = new Date().getDay();
-  let folderHasTodayWuDay = false;
-  
-  if (project.wuDay !== undefined && project.wuDay !== null) {
-    // Project has a custom override
-    const days = Array.isArray(project.wuDay) ? project.wuDay : [project.wuDay];
-    folderHasTodayWuDay = days.includes(currentDay);
-  } else {
-    // Inherit from folder
-    folderHasTodayWuDay = project.localBodyIds && project.localBodyIds.some(fid => {
-      const folder = allSubFolders?.find(sf => sf.id === fid);
-      if (!folder || folder.wuDay === undefined || folder.wuDay === null) return false;
-      const days = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
-      return days.includes(currentDay);
-    });
-  }
-  
-  const needsWeeklyUpdate = !project.isFinished && folderHasTodayWuDay && !isSameWeek(project.lastWeeklyUpdate);
+
+  // Check if any WU day has already passed (or is today) this week
+  const hasWuDayPassedThisWeek = wuDays.some(day => day <= currentDay);
+
+  // Project needs update if: not finished, has WU days, a WU day has passed this week, and no update given this week
+  const needsWeeklyUpdate = !project.isFinished && wuDays.length > 0 && hasWuDayPassedThisWeek && !isSameWeek(project.lastWeeklyUpdate);
+
+  // Build combined updates first (needed by getMissedWeeks)
+  const combinedUpdates = [...allUpdates];
+  localUpdates.forEach(lu => { if (!combinedUpdates.some(u => u.id === lu.id)) combinedUpdates.push(lu); });
+
+  // Calculate missed weeks for the timeline
+  const getMissedWeeks = () => {
+    if (project.isFinished || wuDays.length === 0) return [];
+    const missed = [];
+    const now = new Date();
+    const lastUpdate = project.lastWeeklyUpdate ? new Date(project.lastWeeklyUpdate) : null;
+    
+    // Go back up to 12 weeks to find missed ones
+    for (let weeksBack = 1; weeksBack <= 12; weeksBack++) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay() - (weeksBack * 7));
+      weekStart.setHours(0,0,0,0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23,59,59,999);
+
+      // If the last update was in this week or before project was created, stop
+      if (lastUpdate && lastUpdate >= weekStart && lastUpdate <= weekEnd) break;
+      if (project.createdAt && new Date(project.createdAt) > weekEnd) break;
+
+      // Find the first WU day in that past week
+      const sortedWuDays = [...wuDays].sort((a, b) => a - b);
+      const firstWuDay = sortedWuDays[0];
+      const missedDate = new Date(weekStart);
+      missedDate.setDate(weekStart.getDate() + firstWuDay);
+
+      // Check if any real weekly update exists for that week
+      const hasUpdateInWeek = combinedUpdates.some(u => {
+        if (!u.isWeeklyUpdate) return false;
+        const uDate = new Date(u.timestamp);
+        return uDate >= weekStart && uDate <= weekEnd;
+      });
+
+      if (!hasUpdateInWeek && missedDate <= now) {
+        missed.push({
+          id: `missed_${project.id}_${weeksBack}`,
+          projectId: project.id,
+          text: 'THIS WEEK UPDATION IS NOT GIVEN',
+          timestamp: missedDate.toISOString(),
+          isWeeklyUpdate: true,
+          isMissed: true,
+          attachments: []
+        });
+      }
+    }
+    return missed;
+  };
 
   const themeStyles = THEME_MAP[theme] || THEME_MAP.indigo;
   const cardColorClass = project.isFinished ? "bg-emerald-50 border-emerald-200" : (needsWeeklyUpdate ? "bg-red-50 border-red-200 shadow-md border-2" : (index % 2 === 0 ? themeStyles.light : themeStyles.dark));
@@ -1842,6 +1902,34 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
   const submitEdit = async (e) => {
     e.preventDefault(); if ((!editUpdateText.trim() && editAttachments.length === 0) || isEditUploading) return;
     setIsEditUploading(true);
+    
+    // Check if we're filling in a missed week entry
+    const isMissedEntry = editingUpdateId && editingUpdateId.startsWith('missed_');
+    
+    if (isMissedEntry) {
+      // Find the missed entry to get its timestamp
+      const missedEntry = missedWeekEntries.find(m => m.id === editingUpdateId);
+      const updateId = `upd_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
+      try {
+        let finalAttachments = [];
+        if (user && !authError) {
+          if (editAttachments.length > 0) {
+            finalAttachments = await Promise.all(editAttachments.map(att => {
+              if (att.isExisting) return Promise.resolve({ type: att.type, url: att.url, name: att.name });
+              return uploadToCloudinary(att.data).then(url => ({ type: att.type, url, name: att.name })).catch(() => ({ type: att.type, url: att.data, name: att.name }));
+            }));
+          }
+          const newUpdate = { id: updateId, projectId: project.id, text: editUpdateText, attachments: finalAttachments, timestamp: missedEntry ? missedEntry.timestamp : new Date().toISOString(), isWeeklyUpdate: true, createdAt: new Date().toISOString() };
+          await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', updateId), newUpdate);
+        } else {
+          finalAttachments = editAttachments.map(att => att.isExisting ? att : { type: att.type, url: att.data, name: att.name });
+          const newUpdate = { id: updateId, projectId: project.id, text: editUpdateText, attachments: finalAttachments, timestamp: missedEntry ? missedEntry.timestamp : new Date().toISOString(), isWeeklyUpdate: true };
+          setLocalUpdates(prev => [newUpdate, ...prev]);
+        }
+      } catch (err) { console.error(err); } finally { setIsEditUploading(false); setEditingUpdateId(null); setEditUpdateText(''); setEditAttachments([]); }
+      return;
+    }
+    
     try {
       let finalAttachments = [];
       if (user && !authError) {
@@ -1893,9 +1981,11 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
 
   const formatDate = (ds) => new Date(ds).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatTime = (ds) => new Date(ds).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const combinedUpdates = [...allUpdates];
-  localUpdates.forEach(lu => { if (!combinedUpdates.some(u => u.id === lu.id)) combinedUpdates.push(lu); });
-  const sortedUpdates = combinedUpdates.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  // Add missed week entries to the timeline
+  const missedWeekEntries = getMissedWeeks();
+  const allTimelineUpdates = [...combinedUpdates, ...missedWeekEntries];
+  const sortedUpdates = allTimelineUpdates.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   return (
     <div className={`rounded-xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md ${cardColorClass}`}>
@@ -1957,7 +2047,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
           <div className="relative border-l-2 border-slate-300 ml-2 space-y-4 pb-2">
             {sortedUpdates.map(update => (
               <div key={update.id} className="relative pl-5">
-                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-500 z-10"/>
+                <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-2 ${update.isMissed ? 'border-red-500' : 'border-indigo-500'} z-10`}/>
                 {editingUpdateId === update.id ? (
                   <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
                      <form onSubmit={submitEdit}>
@@ -1967,6 +2057,22 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
                          <button type="submit" className="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs">{isEditUploading ? 'Saving...' : 'Save Changes'}</button>
                        </div>
                      </form>
+                  </div>
+                ) : update.isMissed ? (
+                  <div className="bg-red-50 p-3 rounded-xl shadow-sm border-2 border-red-400 cursor-pointer hover:bg-red-100 transition-colors"
+                    onClick={() => {
+                      // Allow editing a missed entry - create a real update for that week
+                      setEditingUpdateId(update.id);
+                      setEditUpdateText('');
+                      setEditAttachments([]);
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-200 text-red-800">⚠ Missed Weekly Update</span>
+                      <span className="text-xs font-bold text-red-600">{formatDate(update.timestamp)}</span>
+                    </div>
+                    <div className="text-sm font-extrabold text-red-700 uppercase tracking-wide">{update.text}</div>
+                    <div className="text-[10px] text-red-500 mt-1 italic">Tap to add update for this week</div>
                   </div>
                 ) : (
                   <LongPressable delay={2000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className={`bg-white p-3 rounded-xl shadow-sm border ${update.isWeeklyUpdate ? 'border-red-400 bg-red-50/30' : 'border-slate-100'} hover:bg-slate-50 cursor-pointer`}>
