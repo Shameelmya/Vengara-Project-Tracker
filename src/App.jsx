@@ -1029,9 +1029,7 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-3 relative">
-            <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
-              Connected to Cloud DB
-            </span>
+
             {(!activeMainFolder && !activeSubFolder) && (
               <button
                 onClick={() => setIsTodaysReviewsOpen(true)}
