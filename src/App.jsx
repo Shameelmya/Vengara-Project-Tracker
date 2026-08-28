@@ -14,12 +14,12 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAxL8ejtFBr7m7OJ8gYgd1NpyluwGpiZgA",
-  authDomain: "tanur-project-tracker.firebaseapp.com",
-  projectId: "tanur-project-tracker",
-  storageBucket: "tanur-project-tracker.firebasestorage.app",
-  messagingSenderId: "1033537596014",
-  appId: "1:1033537596014:web:88d2ea52b4ff5f08a9947f"
+  apiKey: "AIzaSyBBI_3icsgTRUvDfHPBkcsJdCuy1Z14j2U",
+  authDomain: "vengara-project-tracker.firebaseapp.com",
+  projectId: "vengara-project-tracker",
+  storageBucket: "vengara-project-tracker.firebasestorage.app",
+  messagingSenderId: "840836667022",
+  appId: "1:840836667022:web:448deb7cbce4b1f8721bdf"
 };
 
 let app, auth, db;
@@ -31,7 +31,7 @@ try {
   console.error("Firebase init failed:", e);
 }
 
-const CANVAS_APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'tanur-tracker-default';
+const CANVAS_APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'vengara-tracker-default';
 
 // --- CLOUDINARY UPLOAD FUNCTION ---
 const uploadToCloudinary = async (fileData, resourceType = 'auto') => {
@@ -65,7 +65,7 @@ const INITIAL_MAIN_FOLDERS = [
 const INITIAL_SUB_FOLDERS = [
   // All default assigned to Local Bodies as requested
   { id: 'priority', mainFolderId: 'mf_local_bodies', name: 'Priority Files', color: 'from-red-500 to-rose-700', theme: 'rose', iconName: 'AlertTriangle' },
-  { id: 'tanur', mainFolderId: 'mf_local_bodies', name: 'Tanur Municipality', color: 'from-indigo-500 to-purple-600', theme: 'indigo', iconName: 'Building2' },
+  { id: 'vengara', mainFolderId: 'mf_local_bodies', name: 'Vengara', color: 'from-indigo-500 to-purple-600', theme: 'indigo', iconName: 'Building2' },
   { id: 'ozhur', mainFolderId: 'mf_local_bodies', name: 'Ozhur', color: 'from-emerald-400 to-green-600', theme: 'emerald', iconName: 'Trees' },
   { id: 'cheriyamundam', mainFolderId: 'mf_local_bodies', name: 'Cheriyamundam', color: 'from-blue-400 to-cyan-600', theme: 'blue', iconName: 'MapIcon' },
   { id: 'ponmundam', mainFolderId: 'mf_local_bodies', name: 'Ponmundam', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Tent' },
@@ -437,7 +437,7 @@ function LoginScreen({ onLogin, staffUsers, authError, allUpdates }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const adminUser = { username: 'PK Navas MLA', role: 'admin', id: 'admin', password: 'Navas@2026' };
+  const adminUser = { username: 'KM Shaji MLA', role: 'admin', id: 'admin', password: 'Shaji@2026' };
   const allUsers = [adminUser, ...staffUsers];
 
   const lastSeen = parseInt(localStorage.getItem('admin_last_seen_notifications') || '0', 10);
@@ -547,6 +547,21 @@ function LoginScreen({ onLogin, staffUsers, authError, allUpdates }) {
   );
 }
 
+const getProjectWuDaysHelper = (project, allSubFolders) => {
+  if (project.wuDay !== undefined && project.wuDay !== null) {
+    return Array.isArray(project.wuDay) ? project.wuDay : [project.wuDay];
+  }
+  const folderDaysSet = new Set();
+  project.localBodyIds?.forEach(bodyId => {
+    const folder = allSubFolders.find(sf => sf.id === bodyId);
+    if (folder && folder.wuDay !== undefined && folder.wuDay !== null) {
+      const folderDays = Array.isArray(folder.wuDay) ? folder.wuDay : [folder.wuDay];
+      folderDays.forEach(d => folderDaysSet.add(d));
+    }
+  });
+  return Array.from(folderDaysSet);
+};
+
 export default function App() {
   // Navigation State
   const [activeMainFolder, setActiveMainFolder] = useState(null);
@@ -585,6 +600,9 @@ export default function App() {
 
   const [linkProjectData, setLinkProjectData] = useState(null);
   const [wuDayItem, setWuDayItem] = useState(null);
+  
+  const [isTodaysReviewsOpen, setIsTodaysReviewsOpen] = useState(false);
+  const [todaysReviewsSearch, setTodaysReviewsSearch] = useState('');
 
   const handleExportJSON = async () => {
     try {
@@ -606,7 +624,7 @@ export default function App() {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
       const downloadAnchorNode = document.createElement('a');
       downloadAnchorNode.setAttribute("href", dataStr);
-      downloadAnchorNode.setAttribute("download", "tanur_tracker_backup.json");
+      downloadAnchorNode.setAttribute("download", "vengara_tracker_backup.json");
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
@@ -983,7 +1001,7 @@ export default function App() {
             )}
             <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <MapIcon className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-600" />
-              {activeMainFolder ? activeMainFolder.name : "Tanur Projects Tracker"}
+              {activeMainFolder ? activeMainFolder.name : "Vengara Project Tracker"}
               {!activeMainFolder && (
                 <>
                   <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs font-bold bg-indigo-100 text-indigo-800 px-2 sm:px-3 py-1 rounded-full flex items-center gap-1">
@@ -1014,6 +1032,24 @@ export default function App() {
             <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
               Connected to Cloud DB
             </span>
+            {(!activeMainFolder && !activeSubFolder) && (
+              <button
+                onClick={() => setIsTodaysReviewsOpen(true)}
+                className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-full transition-colors relative" title="Today's Reviews"
+              >
+                <div className="relative flex items-center justify-center">
+                  <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+                  {(() => {
+                     const count = allProjects.filter(p => !p.isFinished && getProjectWuDaysHelper(p, allSubFolders).includes(new Date().getDay())).length;
+                     return count > 0 ? (
+                       <span className="absolute top-[-8px] right-[-8px] bg-red-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white">
+                         {count}
+                       </span>
+                     ) : null;
+                  })()}
+                </div>
+              </button>
+            )}
             {(!loggedInUser || loggedInUser.role === 'admin') && (
               <button 
                 onClick={() => {
@@ -2242,6 +2278,103 @@ function WuDayModal({ item, onClose, onSave }) {
             )}
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// --- TODAY'S REVIEWS MODAL ---
+function TodaysReviewsModal({ allProjects, allSubFolders, displayMainFolders, searchQuery, setSearchQuery, onClose, onProjectSelect }) {
+  const currentDay = new Date().getDay();
+  const todaysProjects = allProjects.filter(p => !p.isFinished && getProjectWuDaysHelper(p, allSubFolders).includes(currentDay));
+  
+  const filteredProjects = todaysProjects.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        
+        <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+              <CheckSquare className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">Today's Reviews</h2>
+              <p className="text-sm text-slate-500 font-medium">{todaysProjects.length} {todaysProjects.length === 1 ? 'project' : 'projects'} scheduled for review today</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-6 shrink-0 border-b border-slate-100 bg-white">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="text-slate-400">🔍</span>
+            </div>
+            <input
+              type="text"
+              placeholder="Search projects to review..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-sm transition-shadow outline-none"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-6 flex-1 overflow-y-auto bg-slate-50/50 rounded-b-2xl">
+          {filteredProjects.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                <CheckSquare className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">No projects found</h3>
+              <p className="text-sm text-slate-500">
+                {searchQuery ? "No projects match your search query." : "There are no projects scheduled for review today."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredProjects.map(project => {
+                const subFolderId = project.localBodyIds && project.localBodyIds[0];
+                const subFolder = allSubFolders.find(sf => sf.id === subFolderId);
+                const mainFolder = subFolder ? displayMainFolders.find(mf => mf.id === subFolder.mainFolderId) : null;
+                
+                return (
+                  <button
+                    key={project.id}
+                    onClick={() => onProjectSelect(project)}
+                    className="w-full text-left bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-start sm:items-center justify-between flex-col sm:flex-row gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-800 text-base sm:text-lg truncate group-hover:text-indigo-700 transition-colors">{project.name}</h4>
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        {mainFolder && (
+                          <span className="inline-flex items-center text-[10px] sm:text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                            {mainFolder.name}
+                          </span>
+                        )}
+                        {subFolder && (
+                          <span className="inline-flex items-center text-[10px] sm:text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">
+                            {subFolder.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-indigo-600 bg-indigo-50 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity self-end sm:self-auto">
+                      <MoveRight className="w-5 h-5" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
