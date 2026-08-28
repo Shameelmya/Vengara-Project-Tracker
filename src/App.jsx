@@ -63,28 +63,22 @@ const INITIAL_MAIN_FOLDERS = [
 ];
 
 const INITIAL_SUB_FOLDERS = [
-  // All default assigned to Local Bodies as requested
-  { id: 'priority', mainFolderId: 'mf_local_bodies', name: 'Priority Files', color: 'from-red-500 to-rose-700', theme: 'rose', iconName: 'AlertTriangle' },
+  // Local Bodies (Vengara Constituency)
   { id: 'vengara', mainFolderId: 'mf_local_bodies', name: 'Vengara', color: 'from-indigo-500 to-purple-600', theme: 'indigo', iconName: 'Building2' },
-  { id: 'ozhur', mainFolderId: 'mf_local_bodies', name: 'Ozhur', color: 'from-emerald-400 to-green-600', theme: 'emerald', iconName: 'Trees' },
-  { id: 'cheriyamundam', mainFolderId: 'mf_local_bodies', name: 'Cheriyamundam', color: 'from-blue-400 to-cyan-600', theme: 'blue', iconName: 'MapIcon' },
-  { id: 'ponmundam', mainFolderId: 'mf_local_bodies', name: 'Ponmundam', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Tent' },
-  { id: 'tanalur', mainFolderId: 'mf_local_bodies', name: 'Tanalur', color: 'from-rose-400 to-pink-600', theme: 'rose', iconName: 'Home' },
-  { id: 'niramaruthur', mainFolderId: 'mf_local_bodies', name: 'Niramaruthur', color: 'from-teal-400 to-emerald-500', theme: 'teal', iconName: 'MapPin' },
-  { id: 'personal', mainFolderId: 'mf_local_bodies', name: 'Personal', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', iconName: 'User' },
-  { id: 'common', mainFolderId: 'mf_local_bodies', name: 'Common', color: 'from-slate-500 to-slate-700', theme: 'slate', iconName: 'Users' },
-  { id: 'trivandrum', mainFolderId: 'mf_local_bodies', name: 'Trivandrum Office', color: 'from-blue-500 to-cyan-600', theme: 'blue', iconName: 'Building2' },
-  { id: 'pwd_bridges', mainFolderId: 'mf_local_bodies', name: 'PWD Bridges', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
-  { id: 'mla_sdf_a', mainFolderId: 'mf_local_bodies', name: 'MLA SDF A', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', iconName: 'Folder' },
-  { id: 'pwd_building', mainFolderId: 'mf_local_bodies', name: 'PWD Building', color: 'from-blue-500 to-cyan-600', theme: 'blue', iconName: 'Folder' },
-  { id: 'pwd_roads', mainFolderId: 'mf_local_bodies', name: 'PWD Roads', color: 'from-blue-500 to-cyan-600', theme: 'blue', iconName: 'Folder' },
-  { id: 'kifbi', mainFolderId: 'mf_local_bodies', name: 'KIFBI', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
-  { id: 'harbour_work', mainFolderId: 'mf_local_bodies', name: 'Harbour Work', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', iconName: 'Folder' },
-  { id: 'irrigation_work', mainFolderId: 'mf_local_bodies', name: 'Irrigation Work', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
-  { id: 'sports_foundation_kerala', mainFolderId: 'mf_local_bodies', name: 'Sports Foundation Kerala', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', iconName: 'Folder' },
-  { id: 'kscadc', mainFolderId: 'mf_local_bodies', name: 'KSCADC', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
-  { id: 'frw_flood_work', mainFolderId: 'mf_local_bodies', name: 'FRW (FLOOD WORK)', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
-  { id: 'cmlrrp', mainFolderId: 'mf_local_bodies', name: 'CMLRRP', color: 'from-rose-400 to-pink-600', theme: 'rose', iconName: 'Folder' },
+  { id: 'abdu_rahiman_nagar', mainFolderId: 'mf_local_bodies', name: 'Abdu Rahiman Nagar', color: 'from-emerald-400 to-green-600', theme: 'emerald', iconName: 'Trees' },
+  { id: 'kannamangalam', mainFolderId: 'mf_local_bodies', name: 'Kannamangalam', color: 'from-blue-400 to-cyan-600', theme: 'blue', iconName: 'MapIcon' },
+  { id: 'oorakam', mainFolderId: 'mf_local_bodies', name: 'Oorakam', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Tent' },
+  { id: 'parappur', mainFolderId: 'mf_local_bodies', name: 'Parappur', color: 'from-rose-400 to-pink-600', theme: 'rose', iconName: 'Home' },
+  { id: 'othukkungal', mainFolderId: 'mf_local_bodies', name: 'Othukkungal', color: 'from-teal-400 to-emerald-500', theme: 'teal', iconName: 'MapPin' },
+
+  // Departments
+  { id: 'pwd_bridges', mainFolderId: 'mf_departments', name: 'PWD Bridges', color: 'from-amber-400 to-orange-500', theme: 'amber', iconName: 'Folder' },
+  { id: 'pwd_roads', mainFolderId: 'mf_departments', name: 'PWD Roads', color: 'from-blue-500 to-cyan-600', theme: 'blue', iconName: 'Folder' },
+  { id: 'flood_work', mainFolderId: 'mf_departments', name: 'Flood Work', color: 'from-teal-400 to-emerald-500', theme: 'teal', iconName: 'Folder' },
+  { id: 'kifb', mainFolderId: 'mf_departments', name: 'KIFB', color: 'from-emerald-400 to-green-600', theme: 'emerald', iconName: 'Folder' },
+  { id: 'irrigation', mainFolderId: 'mf_departments', name: 'Irrigation', color: 'from-cyan-500 to-blue-700', theme: 'blue', iconName: 'Folder' },
+  { id: 'education', mainFolderId: 'mf_departments', name: 'Education', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', iconName: 'Folder' },
+  { id: 'lsgd', mainFolderId: 'mf_departments', name: 'LSGD', color: 'from-rose-500 to-pink-700', theme: 'rose', iconName: 'Folder' },
 ];
 
 const THEME_MAP = {
